@@ -1,0 +1,13 @@
+services:
+
+    p2pool:
+        container_name: p2pool
+        build: .
+        mem_limit: 100M
+        environment:
+            - MONERO_NODE_ADDRESS=blockchain.mbt.local
+            - PROXY_URL=${TORSOCKS_TOR_ADDRESS:-}:9050
+        volumes:
+            - "./data-local:/media/p2pool"
+        ports:
+            - "127.0.0.1:3333:3333"
