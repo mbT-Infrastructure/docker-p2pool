@@ -2,7 +2,8 @@
 set -e
 
 BUILD_ARGUMENTS=()
-DEPENDENCIES=(docker)
+BUILDER_EXPORT_DOCKER_ARCHIVE="${BUILDER_EXPORT_DOCKER_ARCHIVE:-true}"
+DEPENDENCIES=(docker zstd)
 UPDATE_BASE=false
 PLATFORMS=(amd64 arm64)
 REGISTRY_USER="madebytimo"
@@ -71,3 +72,18 @@ docker buildx build "${BUILD_ARGUMENTS[@]}" --output \
     "type=oci,dest=${OUTPUT_FILE},compression=zstd,compression-level=19,force-compression=true" \
     --tag "${IMAGE}:latest" --tag "${IMAGE}:${VERSION}" \
     --tag "${IMAGE}:${VERSION}-base-${BASE_IMAGE_DATE}" .
+
+if [[ "$BUILDER_EXPORT_DOCKER_ARCHIVE" == true ]]; then
+    docker pull --quiet quay.io/skopeo/stable > /dev/null
+    rm -f builds/.temp-docker-archive.tar
+    for PLATFORM in "${PLATFORMS[@]}"; do
+        docker run --interactive --rm --volume "${PWD}/builds:/builds" \
+            quay.io/skopeo/stable copy --additional-tag "${IMAGE}:latest" --additional-tag \
+            "${IMAGE}:${VERSION}" --additional-tag "${IMAGE}:${VERSION}-base-${BASE_IMAGE_DATE}" \
+            --override-arch "$PLATFORM" --quiet "oci-archive:${OUTPUT_FILE}:latest" \
+            "docker-archive:builds/.temp-docker-archive.tar"
+        zstd -19 --force --quiet -T0 builds/.temp-docker-archive.tar \
+            -o "${OUTPUT_FILE%oci.tar}${PLATFORM}.tar.zst"
+        rm -f builds/.temp-docker-archive.tar
+    done
+fi
